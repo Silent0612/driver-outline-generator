@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { DriverSymbol } from './symbolCollector';
+import { DriverSymbol, CollectionResult } from './symbolCollector';
 
 export interface OutlineDocument {
     title: string;
@@ -31,15 +31,19 @@ export interface SymbolOutline {
 }
 
 export class OutlineFormatter {
-    formatOutline(symbols: DriverSymbol[], directory: string): OutlineDocument {
+    formatOutline(result: CollectionResult, directory: string): OutlineDocument {
         const fileMap = new Map<string, DriverSymbol[]>();
 
+        // 初始化所有文件（即使没有符号）
+        result.allFiles.forEach(filePath => {
+            fileMap.set(filePath, []);
+        });
+
         // 按文件分组符号  
-        symbols.forEach(symbol => {
-            if (!fileMap.has(symbol.filePath)) {
-                fileMap.set(symbol.filePath, []);
+        result.symbols.forEach(symbol => {
+            if (fileMap.has(symbol.filePath)) {
+                fileMap.get(symbol.filePath)!.push(symbol);
             }
-            fileMap.get(symbol.filePath)!.push(symbol);
         });
 
         const files: FileOutline[] = [];

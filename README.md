@@ -34,6 +34,7 @@ Generate structured outline files for C/C++ source code, providing a comprehensi
 ## Requirements
 
 - VS Code 1.89 or later
+- **C/C++ Extension (ms-vscode.cpptools)** - Required for symbol extraction. This extension uses VS Code's C/C++ language server to parse and collect symbols from your source files.
 
 ## Known Issues
 

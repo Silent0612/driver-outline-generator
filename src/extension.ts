@@ -23,14 +23,47 @@ export function activate(context: vscode.ExtensionContext) {
 					title: "正在生成C/C++文件大纲...",
 					cancellable: false
 				}, async (progress) => {
-					progress.report({ increment: 0, message: "扫描文件..." });
-					const resultPath = await generator.generateOutline(targetPath, (done, total) => {
-						const percent = total === 0 ? 0 : Math.min(99, Math.floor((done / total) * 99));
-						progress.report({ increment: 0, message: `解析符号 ${done}/${total}` });
-						progress.report({ increment: percent });
-					});
-					progress.report({ increment: 100, message: "完成" });
-					return resultPath;
+					let previousSymbolCount = -1;
+					let currentSymbolCount = 0;
+					let runCount = 0;
+					const maxRuns = 15; // 最多运行15次防止死循环
+
+					while (runCount < maxRuns && previousSymbolCount !== currentSymbolCount) {
+						runCount++;
+						previousSymbolCount = currentSymbolCount;
+
+						progress.report({
+							increment: 0,
+							message: `运行 ${runCount}/${maxRuns}，扫描文件...`
+						});
+
+						const outline = await generator.generateOutlineRaw(targetPath, (done, total) => {
+							const percent = total === 0 ? 0 : Math.min(99, Math.floor((done / total) * 99));
+							progress.report({
+								increment: 0,
+								message: `运行 ${runCount}: 解析符号 ${done}/${total}`
+							});
+							progress.report({ increment: percent });
+						});
+
+						currentSymbolCount = outline.totalSymbols;
+						progress.report({
+							increment: 0,
+							message: `运行 ${runCount} 完成：${outline.totalFiles} 文件，${currentSymbolCount} 符号`
+						});
+
+						// 若符号数已稳定或达到最大运行次数，则输出
+						if (previousSymbolCount === currentSymbolCount || runCount === maxRuns) {
+							await generator.writeOutline(outline, targetPath);
+							progress.report({ increment: 100, message: `完成！总共 ${currentSymbolCount} 个符号` });
+							return targetPath;
+						}
+
+						// 短暂延迟后再次运行
+						await new Promise(resolve => setTimeout(resolve, 500));
+					}
+
+					return targetPath;
 				});
 
 				const action = await vscode.window.showInformationMessage(

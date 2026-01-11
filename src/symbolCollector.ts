@@ -11,12 +11,17 @@ export interface DriverSymbol {
     children?: DriverSymbol[];
 }
 
+export interface CollectionResult {
+    allFiles: string[];
+    symbols: DriverSymbol[];
+}
+
 export class DriverSymbolCollector {
     private readonly cFileExtensions = /\.(c|h|cpp|hpp|cc|cxx|c\+\+|h\+\+|inl|txx)$/i;
     private readonly ignoredDirs = ['.git', '.vscode', 'node_modules', 'build', 'dist', 'out', '__pycache__'];
     private readonly maxConcurrent = 8; // 避免一次性打开过多文件
 
-    async collectSymbolsFromDirectory(dirPath: string, onProgress?: (done: number, total: number) => void): Promise<DriverSymbol[]> {
+    async collectSymbolsFromDirectory(dirPath: string, onProgress?: (done: number, total: number) => void): Promise<CollectionResult> {
         const allSymbols: DriverSymbol[] = [];
         const files = await this.getCAndHFiles(dirPath);
 
@@ -35,7 +40,10 @@ export class DriverSymbolCollector {
             }
         });
 
-        return allSymbols;
+        return {
+            allFiles: files,
+            symbols: allSymbols
+        };
     }
 
     private async getCAndHFiles(dirPath: string): Promise<string[]> {
@@ -73,17 +81,25 @@ export class DriverSymbolCollector {
     private async getSymbolsFromFile(filePath: string): Promise<DriverSymbol[]> {
         const document = await vscode.workspace.openTextDocument(filePath);
 
-        // 使用 VS Code 的文档符号提供者获取符号
-        const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-            'vscode.executeDocumentSymbolProvider',
-            document.uri
-        );
+        // 尝试多次以适配语言服务器预热阶段
+        const maxAttempts = 3;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                'vscode.executeDocumentSymbolProvider',
+                document.uri
+            );
 
-        if (!symbols) {
-            return [];
+            if (symbols && symbols.length >= 0) {
+                return this.convertToDriverSymbols(symbols, filePath);
+            }
+
+            // 渐进退避：100ms, 300ms, 600ms
+            const delayMs = attempt === 1 ? 100 : attempt === 2 ? 300 : 600;
+            await new Promise(resolve => setTimeout(resolve, delayMs));
         }
 
-        return this.convertToDriverSymbols(symbols, filePath);
+        // 最终仍无符号，返回空集合（文件仍会在结果中被记录）
+        return [];
     }
 
     private convertToDriverSymbols(symbols: vscode.DocumentSymbol[], filePath: string): DriverSymbol[] {

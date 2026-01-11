@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DriverSymbolCollector } from './symbolCollector';
-import { OutlineFormatter } from './outlineFormatter';
+import { OutlineFormatter, OutlineDocument } from './outlineFormatter';
 import { OutlineWriter } from './outlineWriter';
 
 export class DriverOutlineGenerator {
@@ -14,29 +14,33 @@ export class DriverOutlineGenerator {
         this.writer = new OutlineWriter();
     }
 
-    async generateOutline(directoryPath: string, onProgress?: (done: number, total: number) => void): Promise<string> {
+    async generateOutlineRaw(directoryPath: string, onProgress?: (done: number, total: number) => void): Promise<OutlineDocument> {
         if (!path.isAbsolute(directoryPath)) {
             throw new Error('目录路径必须是绝对路径');
         }
 
         try {
-            // 收集所有符号  
-            const symbols = await this.collector.collectSymbolsFromDirectory(directoryPath, onProgress);
+            const result = await this.collector.collectSymbolsFromDirectory(directoryPath, onProgress);
 
-            if (symbols.length === 0) {
-                throw new Error('未找到任何C/C++符号，请确保目录包含.c、.h等源文件');
+            if (result.allFiles.length === 0) {
+                throw new Error('未找到任何C/C++文件，请确保目录包含.c、.h等源文件');
             }
 
-            // 格式化大纲  
-            const outline = this.formatter.formatOutline(symbols, directoryPath);
-
-            // 输出文件  
-            const outputPath = path.join(directoryPath, 'driver_outline.json');
-            await this.writer.writeOutlineFile(outline, outputPath);
-
-            return outputPath;
+            const outline = this.formatter.formatOutline(result, directoryPath);
+            return outline;
         } catch (error) {
             throw new Error(`生成文件目录大纲失败: ${error}`);
         }
+    }
+
+    async writeOutline(outline: OutlineDocument, directoryPath: string): Promise<void> {
+        const outputPath = path.join(directoryPath, 'driver_outline.json');
+        await this.writer.writeOutlineFile(outline, outputPath);
+    }
+
+    async generateOutline(directoryPath: string, onProgress?: (done: number, total: number) => void): Promise<string> {
+        const outline = await this.generateOutlineRaw(directoryPath, onProgress);
+        await this.writeOutline(outline, directoryPath);
+        return path.join(directoryPath, 'driver_outline.json');
     }
 }

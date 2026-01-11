@@ -4,6 +4,10 @@
   "description": "Generate outline files for C/C++ files, providing a structured view of the code elements.",
   "version": "0.0.1",
   "publisher": "dutu-mike",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Silent0612/driver-outline-generator.git"
+  },
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#1E1E1E",
@@ -12,6 +16,9 @@
   "engines": {
     "vscode": "^1.89.0"
   },
+  "extensionDependencies": [
+    "ms-vscode.cpptools"
+  ],
   "categories": [
     "Other"
   ],
